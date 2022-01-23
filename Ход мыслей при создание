@@ -1,0 +1,139 @@
+Делаем компоненту FlashAlert, с ее помощью будем сохранять flash сообщения в сессию, и потом их выводить
+Для красивого оформления и вывода будем использовать bootstrap, для этого сделаем метод который нам сможет вернуть адрес для его подключения
+public function get_link_bootstrap5()
+{
+    return ' <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">';
+
+}
+изучив документацию увидел что для оформления флэш сообщении используется class alert, с несколько типов сообщении ('primary', 'secondary', 'success', 'danger', 'warning', 'info', 'light', 'dark' ), зададим их массив types, чтобы исключить другие ошибочные параметры:
+protected $types = [
+    'primary',
+    'secondary',
+    'success',
+    'danger',
+    'warning',
+    'info',
+    'light',
+    'dark'
+];
+
+:
+Сделаем внутренний метод который будет проверять другие ошибочные параметры, и выводить программисту сообщение об ошибке:
+protected function check_type($type)
+    {
+        if (!in_array($type,$this->types)){
+            die('Невозможный параметр $type ('.$type.'), пожалуйста, используйте один из следующих элементах: '.rtrim(implode(', ',$this->types),', '));
+        }
+    }
+
+: 
+Пользователю передавать параметр тип сообщения можно будет как обычную строку, так и массив, но обрабатывать мне будет проще массив, поэтому делаю метод который вернет мне массив с параметром type:
+protected function return_array_if_is_not($types)
+    {
+        if(empty($types)){
+            $types = $this->types;
+        }else{
+            if (!is_array($types)){
+                $types=[$types];
+            }
+        }
+        return $types;
+    }
+
+: 
+
+Для сохранения сообщения в сессию использую массив $_SESSION['alert'][$type]
+public function set($type, $message)
+{
+      
+        $_SESSION['alert'][$type] = $message;
+}
+Но тут я понял что: а если сообщений будет несколько одно типа, и их нужно сохранить… для этого сделал еще один параметр rewrite… с его помощью мы будем определять стирать старые сообщения, или сохранить все, по умолчания, не задавая его, он будет сохранять все
+public function set($type, $message, $rewrite = false)
+{
+   $this->check_type($type);
+
+    if($this->isset_alert($type) and !$rewrite){
+        $_SESSION['alert'][$type].= '<br>'.$message;
+    }else{
+        $_SESSION['alert'][$type] = $message;
+    }
+
+
+}
+для того чтобы проверить есть ли уже запись в массиве алерт такого типа, сделал метод isset_alert:
+protected function isset_alert($type)
+{
+    if(isset($_SESSION['alert'][$type])){
+        return true;
+    }
+return false;
+}
+
+:
+Для вывода сообщении сделал метод get():
+public function get($type = '')
+{
+    $types = $this->return_array_if_is_not($type);
+    $alert='';
+    foreach ($types as $type){
+        $this->check_type($type);
+        if(isset($_SESSION['alert'][$type])){
+            $alert.='<div class="alert alert-'.$type.'" role="alert">'.$_SESSION['alert'][$type].'</div>';
+            unset($_SESSION['alert'][$type]);
+
+        }
+    }
+    return $alert;
+
+}
+
+:
+Так как иногда может потребоваться удалить сообщения не выводя их, сделал метод delete(), принимать будет параметр type, который удалит конкретно сообщение этого типа, или же если не передавать, удалит все флэш сообщения:
+public  function delete($type = '')
+{
+    if (empty($type)){
+        unset($_SESSION['alert']);
+        return true;
+    }
+    $types = $this->return_array_if_is_not($type);
+    foreach ($types as $type) {
+        $this->check_type($type);
+        unset($_SESSION['alert'][$type]);
+    }
+}
+
+:
+Пробуем, переходим в индекс и пишем:
+$flash_alert = new FlashAlert();
+
+echo $flash_alert->get_link_bootstrap5();
+
+$flash_alert->set('success','привет');
+$flash_alert->set('success','пока' );
+$flash_alert->set('success','Я удалил "привет" и "пока", потому-что добавил параметр rewrite true',true );
+$flash_alert->set('danger','Опасно');
+echo $flash_alert->get();
+
+
+Все работает, но я хочу еще задать и выводить сообщения таким способом, как будто каждый тип это публичная переменная 
+$flash_alert->danger = 'warning2';
+echo $flash_alert->danger;
+
+Для этого пишем магический метод __set и __get:
+function __set($name, $value)
+{
+    $this->set($name,$value);
+}
+function __get($name)
+{
+    return  $this->get($name);
+}
+
+Проверяем, все работает!
+
+
+    
+
+
+
